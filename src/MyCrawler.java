@@ -1,5 +1,4 @@
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -7,12 +6,21 @@ import edu.uci.ics.crawler4j.crawler.Page;
 import edu.uci.ics.crawler4j.crawler.WebCrawler;
 import edu.uci.ics.crawler4j.parser.HtmlParseData;
 import edu.uci.ics.crawler4j.url.WebURL;
-import com.opencsv.CSVWriter;
 
 public class MyCrawler extends WebCrawler {
 
-    private final static Pattern FILTERS = Pattern.compile(".*\\.(bmp|gif|jpg|png)$");
-
+	private HashSet<String> visited = new HashSet<>();
+	private String fetchData = "";
+	private String downloadData = "";
+	private String discoverData = "";
+	
+    private final static Pattern FILTERS = Pattern.compile(".*(\\.(css|js|gif|jpg"
+    		 + "|png|mp3|mp3|zip|gz))$");
+    @Override
+    public Object getMyLocalData() {
+        return new String[]{fetchData, downloadData, discoverData};
+    }
+    
     /**
      * This method receives two parameters. The first parameter is the page
      * in which we have discovered this new url and the second parameter is
@@ -26,11 +34,26 @@ public class MyCrawler extends WebCrawler {
      @Override
      public boolean shouldVisit(Page referringPage, WebURL url) {
          String href = url.getURL().toLowerCase();
-         return !FILTERS.matcher(href).matches()
-                && (href.startsWith("https://www.latimes.com/")
-                || href.startsWith("http://www.latimes.com/")
-                || href.startsWith("https://latimes.com/")
-                || href.startsWith("http://latimes.com/"));
+         System.out.println(href);
+         
+         Boolean previouslyVisited = visited.contains(href);
+         
+         Boolean crawl = !FILTERS.matcher(href).matches()
+                 && (href.startsWith("https://www.latimes.com/")
+                         || href.startsWith("http://www.latimes.com/")
+                         || href.startsWith("https://latimes.com/")
+                         || href.startsWith("http://latimes.com/"));
+
+         if(crawl)
+         {
+        	 discoverData += href + ",OK\n";
+         }
+         else 
+         {
+        	 discoverData += href + ",N_OK\n";
+         }
+         
+         return crawl && !previouslyVisited;
      }
 
      /**
@@ -40,28 +63,27 @@ public class MyCrawler extends WebCrawler {
      @Override
      public void visit(Page page) {
          String url = page.getWebURL().getURL();
-         int statusCode = page.getStatusCode();
-         
-         String[] fetchHeader = {"URL", "Status"};
-    
-         
-         List<String[]> fetchList = new ArrayList<>();
-         fetchList.add(fetchHeader); 
-         
          String contentType = page.getContentType();
-         System.out.println("URL: " + url);
-         System.out.println("Status Code: " + statusCode);
-         System.out.println("Content Type: " + contentType);
+         int dataSize = page.getContentData().length;
+         int linksOut = 0; 
+         
+         if (contentType.contains("html") || contentType.contains("doc") || contentType.contains("pdf") || contentType.contains("image"))
+         {
 
-         if (page.getParseData() instanceof HtmlParseData) {
-             HtmlParseData htmlParseData = (HtmlParseData) page.getParseData();
-             String text = htmlParseData.getText();
-             String html = htmlParseData.getHtml();
-             Set<WebURL> links = htmlParseData.getOutgoingUrls();
-
-             System.out.println("Text length: " + text.length());
-             System.out.println("Html length: " + html.length());
-             System.out.println("Number of outgoing links: " + links.size());
+             if (page.getParseData() instanceof HtmlParseData) {
+                 HtmlParseData htmlParseData = (HtmlParseData) page.getParseData();
+                 Set<WebURL> links = htmlParseData.getOutgoingUrls();
+                 linksOut = links.size();
+             }
          }
+         
+         downloadData += url + "," + dataSize + "," + linksOut + "," + contentType + "\n";
     }
+     
+     @Override
+     protected void handlePageStatusCode(WebURL webUrl, int statusCode, String statusDescription) {
+         String url = webUrl.getURL().toLowerCase().replaceAll(",", "_");
+         fetchData += url + "," + statusCode + "\n";
+         visited.add(url);
+     }
 }
